@@ -322,7 +322,7 @@ SOCIAL_AUTH_OIDC_OIDC_ENDPOINT = environ.get('SOCIAL_AUTH_OIDC_OIDC_ENDPOINT')
 SOCIAL_AUTH_OIDC_KEY = environ.get('SOCIAL_AUTH_OIDC_KEY')
 SOCIAL_AUTH_OIDC_SECRET = _read_secret('oidc_secret', environ.get('SOCIAL_AUTH_OIDC_SECRET', ''))
 SOCIAL_AUTH_OIDC_SCOPE = _environ_get_and_map('SOCIAL_AUTH_OIDC_SCOPE', '', _AS_LIST)
-LOGOUT_REDIRECT_URL = environ.get('LOGOUT_REDIRECT_URL')
+LOGOUT_REDIRECT_URL = environ.get('LOGOUT_REDIRECT_URL','/')
 SOCIAL_AUTH_OIDC_JWT_ALGORITHMS = _environ_get_and_map('SOCIAL_AUTH_OIDC_JWT_ALGORITHMS', "RS256", _AS_LIST)
 
 # This repository is used to check whether there is a new release of NetBox available. Set to None to disable the
