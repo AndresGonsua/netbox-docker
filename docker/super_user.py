@@ -21,7 +21,7 @@ su_password = _read_secret('superuser_password', environ.get('SUPERUSER_PASSWORD
 su_api_token = _read_secret('superuser_api_token', environ.get('SUPERUSER_API_TOKEN'))
 su_api_key = _read_secret('superuser_api_key', environ.get('SUPERUSER_API_KEY'))
 
-if User.objects.filter(username=su_name).exits():
+if User.objects.filter(username=su_name).exists():
     print(f'User with name "{su_name}" already exists.')
     sys.exit(0)
 
@@ -41,7 +41,5 @@ else:
         print(f'💡 Superuser Username: {su_name}, E-Mail: {su_email},')
         print(f"💡 API Token: use with '{t.get_auth_header_prefix()}<Your token>'")
     else:
-        print(
-            '⚠️ No API token was be created for the superuser as SUPERUSER_API_TOKEN and SUPERUSER_API_KEY are not set'
-        )
+        print('⚠️ No API token was created for the superuser as SUPERUSER_API_TOKEN and SUPERUSER_API_KEY are not set')
         print(f'💡 Superuser Username: {su_name}, E-Mail: {su_email}')
