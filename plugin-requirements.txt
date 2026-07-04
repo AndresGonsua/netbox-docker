@@ -1,2 +1,3 @@
 netbox-contract
 netbox-inventory
+openpyxl

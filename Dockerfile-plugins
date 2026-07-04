@@ -2,3 +2,6 @@ FROM netboxcommunity/netbox:v4.6.4
 
 COPY ./plugin-requirements.txt /opt/netbox/
 RUN /usr/local/bin/uv pip install -r /opt/netbox/plugin-requirements.txt
+
+COPY ./plugins/netbox_rack_report /opt/netbox/netbox_rack_report
+RUN /usr/local/bin/uv pip install /opt/netbox/netbox_rack_report

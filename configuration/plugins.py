@@ -1,6 +1,7 @@
 PLUGINS = [
     "netbox_contract",
     "netbox_inventory",
+    "netbox_rack_report",
 ]
 
 PLUGINS_CONFIG = {
@@ -8,4 +9,7 @@ PLUGINS_CONFIG = {
         "top_level_menu": True,
     },
     "netbox_inventory": {},
+    "netbox_rack_report": {
+        "alert_threshold": 80,
+    },
 }

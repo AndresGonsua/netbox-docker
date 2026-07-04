@@ -1,0 +1,177 @@
+{% extends 'base/layout.html' %}
+{% load helpers %}
+
+{% block title %}Rack Utilization Report{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="mb-0">
+    <i class="mdi mdi-server"></i> Rack Utilization Report
+  </h1>
+  <a href="{% url 'plugins:netbox_rack_report:rack_report_export' %}" class="btn btn-success">
+    <i class="mdi mdi-microsoft-excel"></i> Export to Excel
+  </a>
+</div>
+
+{% if alerts %}
+<div class="alert alert-warning d-flex align-items-center mb-4" role="alert">
+  <i class="mdi mdi-alert-circle-outline me-2 fs-5"></i>
+  <div>
+    <strong>⚠️ Capacity alert:</strong>
+    {{ alerts|length }} site(s) exceed the {{ alert_threshold }}% utilization threshold:
+    {% for a in alerts %}
+      <strong>{{ a.site.name }}</strong> ({{ a.pct }}%){% if not forloop.last %}, {% endif %}
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# KPIs #}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-2">
+    <div class="card text-center h-100">
+      <div class="card-body">
+        <div class="text-muted small text-uppercase fw-bold">Sites</div>
+        <div class="fs-3 fw-bold">{{ results|length }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card text-center h-100">
+      <div class="card-body">
+        <div class="text-muted small text-uppercase fw-bold">Racks</div>
+        <div class="fs-3 fw-bold">{{ total_racks }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card text-center h-100">
+      <div class="card-body">
+        <div class="text-muted small text-uppercase fw-bold">Devices</div>
+        <div class="fs-3 fw-bold">{{ total_devices }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card text-center h-100">
+      <div class="card-body">
+        <div class="text-muted small text-uppercase fw-bold">Total U</div>
+        <div class="fs-3 fw-bold">{{ total_u }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card text-center h-100">
+      <div class="card-body">
+        <div class="text-muted small text-uppercase fw-bold">Used U</div>
+        <div class="fs-3 fw-bold text-danger">{{ used_u }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card text-center h-100">
+      <div class="card-body">
+        <div class="text-muted small text-uppercase fw-bold">Free U</div>
+        <div class="fs-3 fw-bold text-success">{{ free_u }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Summary table #}
+<div class="card mb-4">
+  <div class="card-header"><strong>Summary by Site</strong></div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>Site</th>
+          <th class="text-end">Racks</th>
+          <th class="text-end">Devices</th>
+          <th class="text-end">Total U</th>
+          <th class="text-end">Used U</th>
+          <th class="text-end">Free U</th>
+          <th>% Utilization</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in results %}
+        <tr {% if r.alert %}class="table-danger"{% endif %}>
+          <td>
+            <a href="{{ r.site.get_absolute_url }}">{{ r.site.name }}</a>
+            {% if r.alert %}<span class="badge bg-danger ms-1">⚠️ > {{ alert_threshold }}%</span>{% endif %}
+          </td>
+          <td class="text-end">{{ r.rack_count }}</td>
+          <td class="text-end">{{ r.device_count }}</td>
+          <td class="text-end">{{ r.total_u }}</td>
+          <td class="text-end">{{ r.used_u }}</td>
+          <td class="text-end">{{ r.free_u }}</td>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              <div class="progress flex-grow-1" style="height:8px;">
+                <div class="progress-bar {% if r.pct >= alert_threshold %}bg-danger{% elif r.pct >= 75 %}bg-warning{% else %}bg-success{% endif %}"
+                     role="progressbar" style="width:{{ r.pct }}%"></div>
+              </div>
+              <span class="text-muted small" style="min-width:40px">{{ r.pct }}%</span>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted">No data</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# Detail by Site #}
+{% for r in results %}
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between">
+    <strong>{{ r.site.name }}</strong>
+    <span class="text-muted small">{{ r.device_count }} devices · {{ r.used_u }} U used · {{ r.pct }}%</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="row g-0">
+      <div class="col-md-6 border-end">
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr><th>Device Role</th><th class="text-end">Devices</th><th class="text-end">U</th></tr>
+          </thead>
+          <tbody>
+            {% for role, vals in r.roles.items %}
+            <tr>
+              <td>{{ role }}</td>
+              <td class="text-end">{{ vals.count }}</td>
+              <td class="text-end">{{ vals.u }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="text-center text-muted">No devices in rack</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="col-md-6">
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr><th>Tenant</th><th class="text-end">Devices</th><th class="text-end">U</th></tr>
+          </thead>
+          <tbody>
+            {% for tenant, vals in r.tenants.items %}
+            <tr>
+              <td>{{ tenant }}</td>
+              <td class="text-end">{{ vals.count }}</td>
+              <td class="text-end">{{ vals.u }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="text-center text-muted">No devices in rack</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+{% endblock %}
