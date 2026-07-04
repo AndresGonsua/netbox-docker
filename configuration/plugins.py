@@ -1,13 +1,11 @@
-# Add your plugins and plugin settings here.
-# Of course uncomment this file out.
+PLUGINS = [
+    "netbox_contract",
+    "netbox_inventory",
+]
 
-# To learn how to build images with your required plugins
-# See https://github.com/netbox-community/netbox-docker/wiki/Using-Netbox-Plugins
-
-# PLUGINS = ["netbox_bgp"]
-
-# PLUGINS_CONFIG = {
-#   "netbox_bgp": {
-#     ADD YOUR SETTINGS HERE
-#   }
-# }
+PLUGINS_CONFIG = {
+    "netbox_contract": {
+        "top_level_menu": True,
+    },
+    "netbox_inventory": {},
+}
