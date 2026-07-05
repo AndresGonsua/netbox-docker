@@ -8,9 +8,14 @@
   <h1 class="mb-0">
     <i class="mdi mdi-server"></i> Rack Utilization Report
   </h1>
-  <a href="{% url 'plugins:netbox_rack_report:rack_report_export' %}" class="btn btn-success">
-    <i class="mdi mdi-microsoft-excel"></i> Export to Excel
-  </a>
+  <div class="d-flex gap-2">
+    <a href="{% url 'plugins:netbox_rack_report:rack_report_export' %}" class="btn btn-success">
+      <i class="mdi mdi-microsoft-excel"></i> Export to Excel
+    </a>
+    <a href="{% url 'plugins:netbox_rack_report:rack_report_export_pdf' %}" class="btn btn-danger">
+      <i class="mdi mdi-file-pdf-box"></i> Export to PDF
+    </a>
+  </div>
 </div>
 
 {% if alerts %}
@@ -86,6 +91,7 @@
       <thead class="table-dark">
         <tr>
           <th>Site</th>
+          <th>Location</th>
           <th class="text-end">Racks</th>
           <th class="text-end">Devices</th>
           <th class="text-end">Total U</th>
@@ -100,6 +106,9 @@
           <td>
             <a href="{{ r.site.get_absolute_url }}">{{ r.site.name }}</a>
             {% if r.alert %}<span class="badge bg-danger ms-1">⚠️ > {{ alert_threshold }}%</span>{% endif %}
+          </td>
+          <td>
+            {% if r.location %}<a href="{{ r.location.get_absolute_url }}">{{ r.location.name }}</a>{% else %}<span class="text-muted">No location</span>{% endif %}
           </td>
           <td class="text-end">{{ r.rack_count }}</td>
           <td class="text-end">{{ r.device_count }}</td>
@@ -117,7 +126,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="7" class="text-center text-muted">No data</td></tr>
+        <tr><td colspan="8" class="text-center text-muted">No data</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -128,7 +137,7 @@
 {% for r in results %}
 <div class="card mb-3">
   <div class="card-header d-flex justify-content-between">
-    <strong>{{ r.site.name }}</strong>
+    <strong>{{ r.site.name }}{% if r.location %} / {{ r.location.name }}{% else %} / <span class="text-muted">No location</span>{% endif %}</strong>
     <span class="text-muted small">{{ r.device_count }} devices · {{ r.used_u }} U used · {{ r.pct }}%</span>
   </div>
   <div class="card-body p-0">

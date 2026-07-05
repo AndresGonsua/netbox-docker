@@ -18,71 +18,77 @@ except Exception:
 
 def compute_utilization():
     """
-    Computes rack utilization by Site, Device Role and Tenant.
+    Computes rack utilization by Site, Location, Device Role and Tenant.
     Returns a list of dicts with the data for the report.
+    Grouping key is (site_id, location_id) so each Location within a Site
+    gets its own row (racks with no Location are grouped under "No location").
     """
-    # Total U capacity per site (sum of u_height of racks)
-    site_total_u = defaultdict(float)
-    site_rack_count = defaultdict(int)
-    site_rack_ids = defaultdict(list)
+    group_total_u = defaultdict(float)
+    group_rack_count = defaultdict(int)
+    group_meta = {}
 
-    for rack in Rack.objects.select_related('site').all():
-        sid = rack.site_id
-        site_total_u[sid] += float(rack.u_height or 0)
-        site_rack_count[sid] += 1
-        site_rack_ids[sid].append(rack.pk)
+    for rack in Rack.objects.select_related('site', 'location').all():
+        loc_id = rack.location_id or 0
+        key = (rack.site_id, loc_id)
+        group_total_u[key] += float(rack.u_height or 0)
+        group_rack_count[key] += 1
+        group_meta[key] = (rack.site, rack.location)
 
-    # Used U and counts per site / role / tenant
-    site_used_u = defaultdict(float)
-    site_device_count = defaultdict(int)
-    site_role = defaultdict(lambda: defaultdict(lambda: {'count': 0, 'u': 0.0}))
-    site_tenant = defaultdict(lambda: defaultdict(lambda: {'count': 0, 'u': 0.0}))
+    group_used_u = defaultdict(float)
+    group_device_count = defaultdict(int)
+    group_role = defaultdict(lambda: defaultdict(lambda: {'count': 0, 'u': 0.0}))
+    group_tenant = defaultdict(lambda: defaultdict(lambda: {'count': 0, 'u': 0.0}))
 
     qs = Device.objects.select_related(
-        'site', 'rack', 'device_type', 'role', 'tenant'
+        'site', 'rack', 'rack__location', 'device_type', 'role', 'tenant'
     ).exclude(rack__isnull=True)
 
     for device in qs:
-        sid = device.site_id
+        loc_id = device.rack.location_id or 0
+        key = (device.site_id, loc_id)
         u_height = float(device.device_type.u_height if device.device_type else 0)
         role_name = device.role.name if device.role else 'No role'
         tenant_name = device.tenant.name if device.tenant else 'No tenant'
 
-        site_device_count[sid] += 1
-        site_used_u[sid] += u_height or 0
+        group_device_count[key] += 1
+        group_used_u[key] += u_height or 0
 
-        site_role[sid][role_name]['count'] += 1
-        site_role[sid][role_name]['u'] += u_height or 0
+        group_role[key][role_name]['count'] += 1
+        group_role[key][role_name]['u'] += u_height or 0
 
-        site_tenant[sid][tenant_name]['count'] += 1
-        site_tenant[sid][tenant_name]['u'] += u_height or 0
+        group_tenant[key][tenant_name]['count'] += 1
+        group_tenant[key][tenant_name]['u'] += u_height or 0
 
-    # Build result
-    sites = {s.pk: s for s in Site.objects.all()}
+    # Build result, sorted by Site name then Location name
+    def sort_key(key):
+        site, location = group_meta[key]
+        return (
+            site.name if site else '',
+            location.name if location else '',
+        )
+
     results = []
+    for key in sorted(group_total_u.keys(), key=sort_key):
+        site, location = group_meta[key]
 
-    for sid in sorted(site_total_u.keys(), key=lambda x: sites.get(x).name if sites.get(x) else ''):
-        site = sites.get(sid)
-        if not site:
-            continue
-
-        total_u = site_total_u[sid]
-        used_u = site_used_u.get(sid, 0)
+        total_u = group_total_u[key]
+        used_u = group_used_u.get(key, 0)
         free_u = total_u - used_u
         pct = round((used_u / total_u * 100), 1) if total_u else 0
         alert = pct >= ALERT_THRESHOLD
 
         results.append({
             'site': site,
-            'rack_count': site_rack_count[sid],
-            'device_count': site_device_count.get(sid, 0),
+            'location': location,
+            'rack_count': group_rack_count[key],
+            'device_count': group_device_count.get(key, 0),
             'total_u': total_u,
             'used_u': used_u,
             'free_u': free_u,
             'pct': pct,
             'alert': alert,
-            'roles': dict(sorted(site_role[sid].items())),
-            'tenants': dict(sorted(site_tenant[sid].items())),
+            'roles': dict(sorted(group_role[key].items())),
+            'tenants': dict(sorted(group_tenant[key].items())),
         })
 
     return results
@@ -148,13 +154,14 @@ class RackReportExportView(LoginRequiredMixin, View):
         # Sheet 1: Summary
         ws1 = wb.active
         ws1.title = 'Summary by Site'
-        headers1 = ['Site', 'Racks', 'Devices', 'Total U', 'Used U', 'Free U', '% Utilization', 'Alert']
+        headers1 = ['Site', 'Location', 'Racks', 'Devices', 'Total U', 'Used U', 'Free U', '% Utilization', 'Alert']
         ws1.append(headers1)
         style_header(ws1, 1, len(headers1))
 
         for i, r in enumerate(results, start=2):
             ws1.append([
                 r['site'].name,
+                r['location'].name if r['location'] else 'No location',
                 r['rack_count'],
                 r['device_count'],
                 r['total_u'],
@@ -173,13 +180,14 @@ class RackReportExportView(LoginRequiredMixin, View):
 
         # Sheet 2: By Role
         ws2 = wb.create_sheet('By Device Role')
-        headers2 = ['Site', 'Device Role', 'Devices', 'Used U']
+        headers2 = ['Site', 'Location', 'Device Role', 'Devices', 'Used U']
         ws2.append(headers2)
         style_header(ws2, 1, len(headers2))
         row_idx = 2
         for r in results:
+            loc_name = r['location'].name if r['location'] else 'No location'
             for role, vals in r['roles'].items():
-                ws2.append([r['site'].name, role, vals['count'], vals['u']])
+                ws2.append([r['site'].name, loc_name, role, vals['count'], vals['u']])
                 for c in range(1, len(headers2) + 1):
                     ws2.cell(row=row_idx, column=c).border = border
                 row_idx += 1
@@ -188,13 +196,14 @@ class RackReportExportView(LoginRequiredMixin, View):
 
         # Sheet 3: By Tenant
         ws3 = wb.create_sheet('By Tenant')
-        headers3 = ['Site', 'Tenant', 'Devices', 'Used U']
+        headers3 = ['Site', 'Location', 'Tenant', 'Devices', 'Used U']
         ws3.append(headers3)
         style_header(ws3, 1, len(headers3))
         row_idx = 2
         for r in results:
+            loc_name = r['location'].name if r['location'] else 'No location'
             for tenant, vals in r['tenants'].items():
-                ws3.append([r['site'].name, tenant, vals['count'], vals['u']])
+                ws3.append([r['site'].name, loc_name, tenant, vals['count'], vals['u']])
                 for c in range(1, len(headers3) + 1):
                     ws3.cell(row=row_idx, column=c).border = border
                 row_idx += 1
@@ -211,4 +220,96 @@ class RackReportExportView(LoginRequiredMixin, View):
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         response['Content-Disposition'] = 'attachment; filename="rack_utilization_report.xlsx"'
+        return response
+
+
+class RackReportPDFExportView(LoginRequiredMixin, View):
+
+    def get(self, request):
+        try:
+            from reportlab.lib import colors
+            from reportlab.lib.pagesizes import landscape, A4
+            from reportlab.lib.units import cm
+            from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+            from reportlab.lib.styles import getSampleStyleSheet
+        except ImportError:
+            return HttpResponse('reportlab is not installed. Run: pip install reportlab', status=500)
+
+        results = compute_utilization()
+        styles = getSampleStyleSheet()
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            topMargin=1.5 * cm,
+            bottomMargin=1.5 * cm,
+            leftMargin=1.5 * cm,
+            rightMargin=1.5 * cm,
+        )
+
+        elements = []
+        elements.append(Paragraph('Rack Utilization Report', styles['Title']))
+        elements.append(Spacer(1, 0.5 * cm))
+
+        table_data = [['Site', 'Location', 'Racks', 'Devices', 'Total U', 'Used U', 'Free U', '% Utilization', 'Alert']]
+        row_alert_flags = [False]  # header row, no alert
+
+        for r in results:
+            table_data.append([
+                r['site'].name,
+                r['location'].name if r['location'] else 'No location',
+                str(r['rack_count']),
+                str(r['device_count']),
+                str(r['total_u']),
+                str(r['used_u']),
+                str(r['free_u']),
+                f"{r['pct']}%",
+                f"> {ALERT_THRESHOLD}%" if r['alert'] else 'OK',
+            ])
+            row_alert_flags.append(r['alert'])
+
+        # Totals row
+        total_u_sum = sum(r['total_u'] for r in results)
+        used_u_sum = sum(r['used_u'] for r in results)
+        table_data.append([
+            'TOTAL', '',
+            str(sum(r['rack_count'] for r in results)),
+            str(sum(r['device_count'] for r in results)),
+            str(total_u_sum),
+            str(used_u_sum),
+            str(total_u_sum - used_u_sum),
+            f"{round(used_u_sum / total_u_sum * 100, 1) if total_u_sum else 0}%",
+            '',
+        ])
+        row_alert_flags.append(False)
+
+        col_widths = [4.5 * cm, 4 * cm, 2 * cm, 2.2 * cm, 2.2 * cm, 2.2 * cm, 2.2 * cm, 3 * cm, 2.5 * cm]
+        table = Table(table_data, colWidths=col_widths, repeatRows=1)
+
+        style_commands = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1F4E5F')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('ALIGN', (2, 0), (-1, -1), 'CENTER'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#E0E0E0')),
+            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ]
+
+        # Highlight alert rows in red
+        for idx, is_alert in enumerate(row_alert_flags):
+            if is_alert:
+                style_commands.append(('BACKGROUND', (0, idx), (-1, idx), colors.HexColor('#FFCDD2')))
+
+        table.setStyle(TableStyle(style_commands))
+        elements.append(table)
+
+        doc.build(elements)
+        buffer.seek(0)
+
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="rack_utilization_report.pdf"'
         return response
