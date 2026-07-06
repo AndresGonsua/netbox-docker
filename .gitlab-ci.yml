@@ -1,0 +1,29 @@
+stages:
+  - build
+
+variables:
+  IMAGE_NAME: $CI_REGISTRY_IMAGE/netbox-custom
+  # Tag basado en el tag de git si existe, o en el commit corto
+  IMAGE_TAG: "${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
+
+build-and-push:
+  stage: build
+  # buildah rootless: no requiere Docker-in-Docker privilegiado,
+  # mas facil de correr en runners compartidos / OCP.
+  image: quay.io/buildah/stable:latest
+  variables:
+    STORAGE_DRIVER: vfs
+    BUILDAH_FORMAT: docker
+  before_script:
+    - buildah login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+  script:
+    - buildah bud --storage-driver=$STORAGE_DRIVER
+        -f Dockerfile-plugins
+        -t "$IMAGE_NAME:$IMAGE_TAG"
+        -t "$IMAGE_NAME:latest"
+        .
+    - buildah push --storage-driver=$STORAGE_DRIVER "$IMAGE_NAME:$IMAGE_TAG"
+    - buildah push --storage-driver=$STORAGE_DRIVER "$IMAGE_NAME:latest"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG'
