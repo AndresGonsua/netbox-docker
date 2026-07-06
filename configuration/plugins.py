@@ -2,6 +2,7 @@ PLUGINS = [
     "netbox_contract",
     "netbox_inventory",
     "netbox_rack_report",
+    "netbox_lifecycle",
 ]
 
 PLUGINS_CONFIG = {
@@ -11,5 +12,9 @@ PLUGINS_CONFIG = {
     "netbox_inventory": {},
     "netbox_rack_report": {
         "alert_threshold": 80,
+    },
+    "netbox_lifecycle": {
+        "lifecycle_card_position": "right_page",
+        "contract_card_position": "right_page",
     },
 }

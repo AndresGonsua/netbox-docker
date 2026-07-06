@@ -13,3 +13,5 @@ configuration/ldap/*
 !configuration/plugins.py
 super-linter.log
 env/netbox.env
+nginx/certs/*.key
+nginx/certs/*.crt
