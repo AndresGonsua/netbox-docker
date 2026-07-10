@@ -1,0 +1,154 @@
+{% extends 'base/layout.html' %}
+{% load helpers %}
+
+{% block title %}Contract Expiration Timeline{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="mb-0">
+    <i class="mdi mdi-calendar-clock-outline"></i> Contract Expiration Timeline
+  </h1>
+</div>
+
+<p class="text-muted">
+  Showing Contracts (from netbox-contract) with an End Date set.
+  Bars represent time remaining until the contract end date, from today ({{ "now"|date:"Y-m-d" }}).
+</p>
+
+{# Contract Type filter #}
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="d-flex align-items-center gap-2">
+      <label for="contract_type" class="form-label mb-0 me-2">Contract Type</label>
+      <select name="contract_type" id="contract_type" class="form-select" style="max-width: 300px;" onchange="this.form.submit()">
+        <option value="">All types</option>
+        {% for ct in contract_types %}
+        <option value="{{ ct.pk }}" {% if selected_type_id == ct.pk|stringformat:"s" %}selected{% endif %}>{{ ct.name }}</option>
+        {% endfor %}
+      </select>
+      {% if selected_type_id %}
+      <a href="{% url 'plugins:netbox_contract_timeline:timeline' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="mdi mdi-close"></i> Clear
+      </a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+{# Summary counts #}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card text-center h-100 border-danger">
+      <div class="card-body">
+        <div class="text-muted small text-uppercase fw-bold">Critical (&lt; {{ thresholds.red_max }}mo)</div>
+        <div class="fs-3 fw-bold text-danger">{{ counts.red }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center h-100" style="border-color:#fd7e14;">
+      <div class="card-body">
+        <div class="text-muted small text-uppercase fw-bold">Warning ({{ thresholds.red_max }}-{{ thresholds.orange_max }}mo)</div>
+        <div class="fs-3 fw-bold" style="color:#fd7e14;">{{ counts.orange }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center h-100 border-warning">
+      <div class="card-body">
+        <div class="text-muted small text-uppercase fw-bold">Upcoming ({{ thresholds.orange_max }}-{{ thresholds.yellow_max }}mo)</div>
+        <div class="fs-3 fw-bold text-warning">{{ counts.yellow }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center h-100 border-success">
+      <div class="card-body">
+        <div class="text-muted small text-uppercase fw-bold">OK (&gt; {{ thresholds.yellow_max }}mo)</div>
+        <div class="fs-3 fw-bold text-success">{{ counts.green }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Timeline #}
+<div class="card mb-4">
+  <div class="card-header"><strong>Timeline</strong></div>
+  <div class="card-body">
+
+    {# Axis header #}
+    <div class="d-flex mb-2">
+      <div style="width: 36px; flex-shrink: 0;"></div>
+      <div style="width: 260px; flex-shrink: 0;"></div>
+      <div class="position-relative flex-grow-1" style="height: 24px;">
+        {% for tick in axis_ticks %}
+        <div class="position-absolute text-muted small" style="left: {{ tick.pct }}%; transform: translateX(-50%);">
+          {{ tick.label }}mo
+        </div>
+        {% endfor %}
+      </div>
+      <div style="width: 110px; flex-shrink: 0;"></div>
+    </div>
+
+    {% for item in items %}
+    <div class="mb-2">
+      <div class="d-flex align-items-center">
+        <div style="width: 36px; flex-shrink: 0;">
+          <button class="btn btn-sm btn-outline-secondary p-1" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#devices-{{ item.contract.pk }}"
+                  aria-expanded="false" aria-controls="devices-{{ item.contract.pk }}"
+                  title="Show linked devices">
+            <i class="mdi mdi-plus"></i>
+          </button>
+        </div>
+        <div style="width: 260px; flex-shrink: 0;" class="pe-2 text-truncate">
+          <a href="{{ item.contract.get_absolute_url }}">{{ item.contract.name }}</a>
+          <div class="text-muted small">
+            {% if item.contract.contract_type %}{{ item.contract.contract_type.name }}{% else %}No type{% endif %}
+            &middot; {{ item.device_count }} device{{ item.device_count|pluralize }}
+          </div>
+        </div>
+        <div class="position-relative flex-grow-1" style="height: 26px; background: var(--bs-tertiary-bg, #f1f1f1); border-radius: 4px;">
+          {% for tick in axis_ticks %}
+          <div class="position-absolute" style="left: {{ tick.pct }}%; top: 0; bottom: 0; width: 1px; background: rgba(0,0,0,0.08);"></div>
+          {% endfor %}
+          <div class="position-absolute h-100 d-flex align-items-center justify-content-end pe-2"
+               style="left: 0; width: {{ item.bar_pct }}%; border-radius: 4px;
+                      background-color: {% if item.band == 'red' %}#dc3545{% elif item.band == 'orange' %}#fd7e14{% elif item.band == 'yellow' %}#ffc107{% else %}#198754{% endif %};">
+            <span class="small fw-bold {% if item.band == 'yellow' %}text-dark{% else %}text-white{% endif %}">
+              {% if item.expired %}EXPIRED{% else %}{{ item.months_remaining }}mo{% endif %}
+            </span>
+          </div>
+        </div>
+        <div style="width: 110px; flex-shrink: 0;" class="ps-2 text-muted small">
+          {{ item.end_date }}
+        </div>
+      </div>
+
+      {# Collapsible devices panel #}
+      <div class="collapse" id="devices-{{ item.contract.pk }}">
+        <div class="card card-body mt-1 ms-4" style="max-width: 600px;">
+          {% if item.devices %}
+          <ul class="list-unstyled mb-0">
+            {% for device in item.devices %}
+            <li class="mb-1">
+              <i class="mdi mdi-server text-muted"></i>
+              <a href="{{ device.get_absolute_url }}">{{ device.name|default:"(unnamed device)" }}</a>
+              <span class="text-muted small">— {{ device.site.name }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <span class="text-muted small">No devices linked to this contract.</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% empty %}
+    <p class="text-muted mb-0">No contracts found with an End Date set{% if selected_type_id %} for this Contract Type{% endif %}.</p>
+    {% endfor %}
+
+  </div>
+</div>
+
+{% endblock %}

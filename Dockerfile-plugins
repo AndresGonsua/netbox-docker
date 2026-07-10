@@ -5,3 +5,6 @@ RUN /usr/local/bin/uv pip install -r /opt/netbox/plugin-requirements.txt
 
 COPY ./plugins/netbox_rack_report /opt/netbox/netbox_rack_report
 RUN /usr/local/bin/uv pip install /opt/netbox/netbox_rack_report
+
+COPY ./plugins/netbox_contract_timeline /opt/netbox/netbox_contract_timeline
+RUN /usr/local/bin/uv pip install /opt/netbox/netbox_contract_timeline
