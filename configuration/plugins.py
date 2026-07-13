@@ -3,6 +3,7 @@ PLUGINS = [
     "netbox_inventory",
     "netbox_rack_report",
     "netbox_contract_timeline",
+    "netbox-topology-views",
 ]
 
 PLUGINS_CONFIG = {
@@ -14,8 +15,8 @@ PLUGINS_CONFIG = {
         "alert_threshold": 80,
     },
     "netbox_contract_timeline": {
-        "red_max_months": 8,
-        "orange_max_months": 12,
-        "yellow_max_months": 18,
+        "red_max_months": 6,
+        "orange_max_months": 8,
+        "yellow_max_months": 12,
     },
 }
