@@ -2,3 +2,4 @@ netbox-contract
 netbox-inventory
 openpyxl
 reportlab
+netbox-topology
